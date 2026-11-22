@@ -136,6 +136,7 @@
 <section id="library">
   <h1>My Books</h1>
   <p class="sub">Works fully offline. Your place in each book and your notes are saved automatically.</p>
+  <p id="offlineStatus" class="sub hidden"></p>
   <div id="storageWarn" class="empty hidden" style="margin-bottom:20px;color:var(--accent);border-color:var(--accent)">
     ⚠ This window can't save anything: your page and notes will be lost when you close it.<br>
     Open the file <b>C:\SelfWork\Books\Reader\Book Reader.html</b> by double-clicking it in File Explorer (it opens in Chrome).</div>
@@ -671,6 +672,18 @@ window.addEventListener("beforeunload", () => { if (R.book) { R.book.lastPage = 
   if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
   try { await addBundledBooks(); } catch (e) { console.error(e); }
   renderLibrary();
+  // Website version: tell the reader when the app is saved on this device for offline use.
+  if (location.protocol !== "file:" && "serviceWorker" in navigator && window.caches) {
+    const st = $("offlineStatus"); st.classList.remove("hidden");
+    st.textContent = "⏳ Saving the app on this device for offline use… keep the internet on.";
+    navigator.serviceWorker.ready.then(async () => {
+      const keys = await caches.keys();
+      if (keys.some((k) => k.startsWith("book-reader-"))) {
+        st.textContent = "✓ Ready to use offline on this device.";
+        st.style.color = "#2e7d32";
+      }
+    });
+  }
 })();
 </script>
 </body>
