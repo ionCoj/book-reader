@@ -1,0 +1,677 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Book Reader</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" type="image/png" href="icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Books">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#f5f1ea">
+<style>
+  :root {
+    --bg: #f5f1ea; --panel: #fffdf9; --ink: #2a2622; --muted: #7a7068; --line: #e4ddd2;
+    --accent: #b5562b; --accent-ink: #fff; --page-shadow: 0 2px 14px rgba(60,40,20,.15);
+    --hover: #efe8dd; --note: #fff6d9;
+  }
+  body.night {
+    --bg: #17181b; --panel: #202226; --ink: #e6e2dc; --muted: #9a958e; --line: #33363b;
+    --accent: #e0814f; --accent-ink: #17181b; --page-shadow: 0 2px 14px rgba(0,0,0,.6);
+    --hover: #2a2d32; --note: #2c2a22;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body { background: var(--bg); color: var(--ink); font: 15px/1.45 "Segoe UI", system-ui, sans-serif; }
+  button, input, textarea { font: inherit; color: inherit; }
+  button { cursor: pointer; border: 1px solid var(--line); background: var(--panel); border-radius: 8px; padding: 6px 11px; }
+  button:hover { background: var(--hover); }
+  button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
+  button.primary:hover { filter: brightness(1.07); }
+  button.icon { padding: 6px 9px; min-width: 36px; }
+  button.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+  .hidden { display: none !important; }
+
+  /* ---------- Library ---------- */
+  #library { max-width: 980px; margin: 0 auto; padding: 32px 20px 60px; }
+  #library h1 { font: 600 30px/1.2 Georgia, "Times New Roman", serif; margin: 0 0 4px; }
+  .sub { color: var(--muted); margin: 0 0 24px; }
+  .lib-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 24px; }
+  #books { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 10px; cursor: pointer; transition: transform .1s; }
+  .card:hover { transform: translateY(-2px); box-shadow: var(--page-shadow); }
+  .card h2 { font: 600 17px/1.3 Georgia, serif; margin: 0; word-break: break-word; }
+  .card .meta { color: var(--muted); font-size: 13px; }
+  .bar { height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; }
+  .bar > i { display: block; height: 100%; background: var(--accent); }
+  .card .row { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .card .remove { font-size: 12px; padding: 3px 8px; color: var(--muted); }
+  .empty { border: 2px dashed var(--line); border-radius: 12px; padding: 40px 20px; text-align: center; color: var(--muted); }
+  .tip { margin-top: 28px; font-size: 13px; color: var(--muted); }
+
+  /* ---------- Reader ---------- */
+  #reader { height: 100%; display: grid; grid-template-rows: auto 1fr; }
+  #topbar { display: flex; align-items: center; gap: 6px; padding: 8px 10px; background: var(--panel); border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+  #bookTitle { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 28vw; margin: 0 6px; }
+  .spacer { flex: 1; }
+  .group { display: flex; align-items: center; gap: 4px; }
+  #pageInput { width: 64px; text-align: center; padding: 5px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); }
+  #pageTotal { color: var(--muted); white-space: nowrap; }
+  #saved { color: var(--muted); font-size: 12px; min-width: 60px; }
+
+  #body { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; min-height: 0; }
+  #toc { grid-column: 1; } #viewer { grid-column: 2; } #notesPanel { grid-column: 3; }
+  aside { background: var(--panel); border-color: var(--line); overflow-y: auto; min-height: 0; }
+  #toc { width: 280px; border-right: 1px solid var(--line); padding: 12px 8px; }
+  #notesPanel { width: 340px; border-left: 1px solid var(--line); padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+  aside h3 { margin: 4px 6px 10px; font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+  .toc-item { display: block; width: 100%; text-align: left; border: 0; background: none; padding: 5px 8px; border-radius: 6px; font-size: 14px; }
+  .toc-item:hover { background: var(--hover); }
+  .toc-item.current { background: var(--hover); font-weight: 600; }
+  .toc-kids { margin-left: 12px; }
+  .toc-item .pg { color: var(--muted); font-size: 12px; float: right; margin-left: 8px; }
+
+  #viewer { overflow: auto; min-height: 0; padding: 24px 16px 40px; outline: none; }
+  #pageWrap { position: relative; margin: 0 auto; box-shadow: var(--page-shadow); background: #fff; }
+  #pageCanvas { display: block; }
+  body.night #pageCanvas { filter: invert(.92) hue-rotate(180deg); }
+  #loading { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #888; }
+
+  /* PDF.js text layer (lets you select text to quote it in a note) */
+  .textLayer { position: absolute; inset: 0; overflow: hidden; line-height: 1; text-align: initial; opacity: 1; forced-color-adjust: none; transform-origin: 0 0; z-index: 2; }
+  .textLayer span, .textLayer br { color: transparent; position: absolute; white-space: pre; cursor: text; transform-origin: 0% 0%; }
+  .textLayer ::selection { background: rgba(181, 86, 43, .35); }
+  .textLayer .endOfContent { display: block; position: absolute; inset: 100% 0 0; z-index: -1; cursor: default; user-select: none; }
+
+  #composer { background: var(--note); border: 1px solid var(--line); border-radius: 10px; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+  #composer label { font-size: 13px; color: var(--muted); }
+  #noteText { width: 100%; min-height: 90px; resize: vertical; border: 1px solid var(--line); border-radius: 8px; padding: 8px; background: var(--panel); }
+  #composer .row { display: flex; gap: 6px; justify-content: flex-end; flex-wrap: wrap; }
+  .tabs { display: flex; gap: 4px; }
+  .tabs button { flex: 1; font-size: 13px; }
+  #noteSearch { width: 100%; padding: 6px 9px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); }
+  .note { border: 1px solid var(--line); border-radius: 10px; padding: 10px; background: var(--bg); }
+  .note .head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; gap: 6px; }
+  .note .pgbtn { font-size: 12px; padding: 2px 8px; border-radius: 20px; }
+  .note .date { font-size: 11px; color: var(--muted); }
+  .note .txt { white-space: pre-wrap; word-break: break-word; }
+  .note .acts { display: flex; gap: 4px; justify-content: flex-end; margin-top: 6px; }
+  .note .acts button { font-size: 12px; padding: 2px 8px; }
+  .muted { color: var(--muted); font-size: 13px; }
+  #toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 8px 16px; border-radius: 8px; opacity: 0; transition: opacity .2s; pointer-events: none; z-index: 10; }
+  #toast.show { opacity: .95; }
+
+  /* iPhone notch / home bar */
+  #topbar { padding-top: max(8px, env(safe-area-inset-top)); padding-left: max(10px, env(safe-area-inset-left)); padding-right: max(10px, env(safe-area-inset-right)); }
+  #library { padding-top: max(32px, env(safe-area-inset-top)); }
+  #viewer { -webkit-overflow-scrolling: touch; }
+  .closePanel { display: none; }
+
+  @media (max-width: 900px) {
+    #toc, #notesPanel { position: fixed; z-index: 5; box-shadow: 0 -4px 24px rgba(0,0,0,.25); }
+    #toc { left: 0; top: var(--tb, 52px); bottom: 0; width: min(320px, 88vw); }
+    /* notes slide up from the bottom like a sheet */
+    #notesPanel { left: 0; right: 0; bottom: 0; width: auto; height: 62vh; border-left: 0; border-top: 1px solid var(--line);
+      border-radius: 16px 16px 0 0; padding-bottom: max(12px, env(safe-area-inset-bottom)); }
+    .closePanel { display: block; align-self: flex-end; }
+    #bookTitle, #saved { display: none; }
+    #viewer { padding: 12px 6px 40px; }
+  }
+  @media (max-width: 600px) {
+    #topbar { gap: 4px; }
+    #topbar .spacer { display: none; }
+    #topbar .group { flex: 1; justify-content: center; }
+    #backBtn .lbl, #notesBtn .lbl { display: none; }
+    input, textarea { font-size: 16px; } /* stops iPhone from zooming in when typing */
+    button.icon { min-width: 34px; padding: 6px 7px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ================= LIBRARY ================= -->
+<section id="library">
+  <h1>My Books</h1>
+  <p class="sub">Works fully offline. Your place in each book and your notes are saved automatically.</p>
+  <div id="storageWarn" class="empty hidden" style="margin-bottom:20px;color:var(--accent);border-color:var(--accent)">
+    ⚠ This window can't save anything: your page and notes will be lost when you close it.<br>
+    Open the file <b>C:\SelfWork\Books\Reader\Book Reader.html</b> by double-clicking it in File Explorer (it opens in Chrome).</div>
+  <div class="lib-actions">
+    <button class="primary" id="addBtn">+ Add a PDF</button>
+    <button id="exportAllBtn">Back up all notes</button>
+    <button id="importBtn">Restore notes from backup</button>
+    <button id="nightBtnLib" class="icon" title="Night mode">🌙</button>
+    <input type="file" id="fileInput" accept="application/pdf,.pdf" multiple hidden>
+    <input type="file" id="importInput" accept=".json,application/json" hidden>
+  </div>
+  <div id="books"></div>
+  <p class="tip">Tip: add each book once. It is copied into this device, so after that it opens without the original file and without internet.
+  Each device keeps its own books, page and notes. Use “Back up all notes” to keep a copy of your notes.</p>
+</section>
+
+<!-- ================= READER ================= -->
+<section id="reader" class="hidden">
+  <div id="topbar">
+    <button id="backBtn" title="Back to library (Esc)">←<span class="lbl"> Library</span></button>
+    <button id="tocBtn" class="icon" title="Contents (C)">☰</button>
+    <span id="bookTitle"></span>
+    <span class="spacer"></span>
+    <div class="group">
+      <button id="prevBtn" class="icon" title="Previous page (←)">‹</button>
+      <input id="pageInput" type="number" min="1" title="Type a page and press Enter">
+      <span id="pageTotal"></span>
+      <button id="nextBtn" class="icon" title="Next page (→)">›</button>
+    </div>
+    <div class="group">
+      <button id="zoomOut" class="icon" title="Zoom out (-)">−</button>
+      <button id="zoomFit" title="Fit to width (0)">Fit</button>
+      <button id="zoomIn" class="icon" title="Zoom in (+)">+</button>
+    </div>
+    <span id="saved"></span>
+    <span class="spacer"></span>
+    <button id="nightBtn" class="icon" title="Night mode (D)">🌙</button>
+    <button id="notesBtn" title="Notes (N)">✎ Notes</button>
+  </div>
+
+  <div id="body">
+    <aside id="toc" class="hidden">
+      <button class="closePanel" data-close="toc">✕ Close</button>
+      <h3>Contents</h3>
+      <div id="tocList"></div>
+    </aside>
+
+    <main id="viewer" tabindex="0">
+      <div id="pageWrap">
+        <canvas id="pageCanvas"></canvas>
+        <div id="textLayer" class="textLayer"></div>
+        <div id="loading">Loading…</div>
+      </div>
+    </main>
+
+    <aside id="notesPanel" class="hidden">
+      <button class="closePanel" data-close="notesPanel">✕ Close</button>
+      <div id="composer">
+        <label id="composerLabel">New note on page 1</label>
+        <textarea id="noteText" placeholder="Write a remark about this page…  (Ctrl+Enter to save)"></textarea>
+        <div class="row">
+          <button id="quoteBtn" title="Select text on the page first">❝ Quote selection</button>
+          <button id="cancelEditBtn" class="hidden">Cancel</button>
+          <button id="saveNoteBtn" class="primary">Save note</button>
+        </div>
+      </div>
+      <div class="tabs">
+        <button id="tabPage" class="on">This page</button>
+        <button id="tabAll">All notes</button>
+      </div>
+      <input id="noteSearch" type="search" placeholder="Search notes…" class="hidden">
+      <div id="noteList"></div>
+      <button id="exportBookBtn" title="Save this book's notes as a text file">Export notes as text</button>
+    </aside>
+  </div>
+</section>
+
+<div id="toast"></div>
+
+<!-- PDF.js, bundled locally so it works with no internet.
+     Loading the worker as a normal script lets PDF.js run straight from a file:// page. -->
+<script src="lib/pdf.min.js"></script>
+<script>
+  if (location.protocol === "file:") {
+    // Opened as a file on the laptop: run PDF.js on the page itself, and load the packed-in books.
+    document.write('<script src="lib/pdf.worker.min.js"><\/script><script src="books/books.js"><\/script>');
+  } else {
+    // Opened as a website (phone/tablet): use a background worker, and work offline after the first visit.
+    pdfjsLib.GlobalWorkerOptions.workerSrc = "lib/pdf.worker.min.js";
+    if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
+  }
+</script>
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id);
+
+/* ================= Storage (IndexedDB) ================= */
+const DB_NAME = "book-reader", DB_VER = 1;
+let db;
+function openDB() {
+  return new Promise((res, rej) => {
+    const r = indexedDB.open(DB_NAME, DB_VER);
+    r.onupgradeneeded = () => {
+      const d = r.result;
+      d.createObjectStore("books", { keyPath: "id" });        // metadata
+      d.createObjectStore("files", { keyPath: "id" });        // the PDF bytes
+      const n = d.createObjectStore("notes", { keyPath: "id" });
+      n.createIndex("bookId", "bookId");
+    };
+    r.onsuccess = () => res(r.result);
+    r.onerror = () => rej(r.error);
+  });
+}
+function tx(store, mode, fn) {
+  return new Promise((res, rej) => {
+    const t = db.transaction(store, mode);
+    const s = t.objectStore(store);
+    let out;
+    const req = fn(s);
+    if (req) req.onsuccess = () => { out = req.result; };
+    t.oncomplete = () => res(out);
+    t.onerror = () => rej(t.error);
+  });
+}
+// If the browser blocks storage (e.g. a preview window), fall back to memory so books still open.
+let mem = null;
+const memStore = (s) => mem[s] || (mem[s] = new Map());
+const getAll = async (store) => mem ? [...memStore(store).values()] : tx(store, "readonly", (s) => s.getAll());
+const getOne = async (store, key) => mem ? memStore(store).get(key) : tx(store, "readonly", (s) => s.get(key));
+const put = async (store, val) => mem ? void memStore(store).set(val.id, val) : tx(store, "readwrite", (s) => s.put(val));
+const del = async (store, key) => mem ? void memStore(store).delete(key) : tx(store, "readwrite", (s) => s.delete(key));
+const notesFor = async (bookId) => mem ? [...memStore("notes").values()].filter((n) => n.bookId === bookId) : tx("notes", "readonly", (s) => s.index("bookId").getAll(bookId));
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+
+/* ================= Helpers ================= */
+function toast(msg) {
+  const t = $("toast"); t.textContent = msg; t.classList.add("show");
+  clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove("show"), 1800);
+}
+function esc(s) { return s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
+function fmtDate(ts) { return new Date(ts).toLocaleString(undefined, { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }); }
+function niceName(fileName) {
+  return fileName.replace(/\.pdf$/i, "").replace(/_?\(?\s*PDFDrive\.com\s*_?\)?/gi, "").replace(/[_]+/g, " ").replace(/\s{2,}/g, " ").trim();
+}
+function download(name, text, type = "text/plain") {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([text], { type }));
+  a.download = name; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+function setNight(on) {
+  document.body.classList.toggle("night", on);
+  try { localStorage.setItem("night", on ? "1" : "0"); } catch {}
+}
+
+/* ================= Library ================= */
+async function renderLibrary() {
+  const books = (await getAll("books")).sort((a, b) => (b.openedAt || b.addedAt) - (a.openedAt || a.addedAt));
+  const allNotes = await getAll("notes");
+  const el = $("books");
+  if (!books.length) {
+    el.innerHTML = `<div class="empty">No books yet.<br>Click <b>+ Add a PDF</b> and pick a book from your computer.</div>`;
+    return;
+  }
+  el.innerHTML = "";
+  for (const b of books) {
+    const count = allNotes.filter((n) => n.bookId === b.id).length;
+    const pct = b.pages ? Math.round((b.lastPage / b.pages) * 100) : 0;
+    const card = document.createElement("div");
+    card.className = "card";
+    card.innerHTML = `
+      <h2>${esc(b.title)}</h2>
+      <div class="bar"><i style="width:${pct}%"></i></div>
+      <div class="row"><span class="meta">Page ${b.lastPage || 1} of ${b.pages || "?"} · ${pct}%</span>
+        <span class="meta">${count} note${count === 1 ? "" : "s"}</span></div>
+      <div class="row"><span class="meta">${b.openedAt ? "Last read " + fmtDate(b.openedAt) : "Not opened yet"}</span>
+        <button class="remove" title="Remove book">Remove</button></div>`;
+    card.onclick = () => openBook(b.id);
+    card.querySelector(".remove").onclick = async (e) => {
+      e.stopPropagation();
+      if (!confirm(`Remove "${b.title}" and its ${count} note(s) from this reader?\n(The PDF on your computer is not touched.)`)) return;
+      await del("books", b.id); await del("files", b.id);
+      for (const n of allNotes.filter((n) => n.bookId === b.id)) await del("notes", n.id);
+      renderLibrary();
+    };
+    el.appendChild(card);
+  }
+}
+
+async function addFiles(files) {
+  for (const f of files) {
+    const data = await f.arrayBuffer();
+    let pages = 0;
+    try { const doc = await pdfjsLib.getDocument({ data: data.slice(0) }).promise; pages = doc.numPages; doc.destroy(); }
+    catch { toast(`"${f.name}" could not be read as a PDF`); continue; }
+    const existing = (await getAll("books")).find((b) => b.fileName === f.name && b.size === f.size);
+    if (existing) { toast(`"${existing.title}" is already in your library`); continue; }
+    const id = uid();
+    await put("files", { id, data });
+    await put("books", { id, title: niceName(f.name), fileName: f.name, size: f.size, pages, lastPage: 1, zoom: "fit", addedAt: Date.now() });
+    toast(`Added "${niceName(f.name)}"`);
+  }
+  renderLibrary();
+}
+
+// Adds the books packed into books/books.js the first time the page opens.
+async function addBundledBooks() {
+  const list = window.BUNDLED_BOOKS || [];
+  if (!list.length) return;
+  const mine = await getAll("books");
+  for (const bb of list) {
+    if (mine.some((b) => b.fileName === bb.fileName && b.size === bb.size)) continue;
+    const bin = atob(bb.b64), bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    let pages = 0;
+    try { const doc = await pdfjsLib.getDocument({ data: bytes.slice() }).promise; pages = doc.numPages; doc.destroy(); } catch {}
+    const id = uid();
+    await put("files", { id, data: bytes.buffer });
+    await put("books", { id, title: bb.title, fileName: bb.fileName, size: bb.size, pages, lastPage: 1, zoom: "fit", addedAt: Date.now() });
+  }
+  delete window.BUNDLED_BOOKS; // free the memory
+}
+
+/* ================= Reader ================= */
+const R = { book: null, pdf: null, page: 1, zoom: "fit", renderTask: null, outlineFlat: [], notes: [], tab: "page", editing: null, saveTimer: null };
+
+async function openBook(id) {
+  const book = await getOne("books", id);
+  const file = await getOne("files", id);
+  if (!book || !file) { toast("This book's file is missing. Remove it and add it again."); return; }
+  R.book = book; R.zoom = book.zoom || "fit"; R.page = book.lastPage || 1;
+  $("library").classList.add("hidden"); $("reader").classList.remove("hidden");
+  $("bookTitle").textContent = book.title; document.title = book.title;
+  $("loading").classList.remove("hidden");
+  R.pdf = await pdfjsLib.getDocument({ data: file.data.slice(0) }).promise;
+  if (book.pages !== R.pdf.numPages) { book.pages = R.pdf.numPages; }
+  $("pageTotal").textContent = `/ ${R.pdf.numPages}`;
+  $("pageInput").max = R.pdf.numPages;
+  book.openedAt = Date.now(); await put("books", book);
+  R.notes = await notesFor(id);
+  R.editing = null; R.tab = "page";
+  setTopbarVar();
+  try { $("noteText").value = localStorage.getItem("draft:" + id) || ""; } catch { $("noteText").value = ""; }
+  try { if (localStorage.getItem("notesOpen") === "1") $("notesPanel").classList.remove("hidden"); } catch {}
+  await buildOutline();
+  await goTo(R.page, { resume: true });
+  $("viewer").focus();
+}
+
+async function closeBook() {
+  await persistPage();
+  if (R.renderTask) R.renderTask.cancel();
+  if (R.pdf) R.pdf.destroy();
+  R.pdf = null; R.book = null;
+  $("reader").classList.add("hidden"); $("library").classList.remove("hidden");
+  document.title = "Book Reader";
+  renderLibrary();
+}
+
+async function persistPage() {
+  if (!R.book) return;
+  R.book.lastPage = R.page; R.book.zoom = R.zoom;
+  await put("books", R.book);
+  $("saved").textContent = "✓ saved";
+}
+
+async function goTo(n, opts = {}) {
+  if (!R.pdf) return;
+  n = Math.max(1, Math.min(R.pdf.numPages, Math.round(n) || 1));
+  const changed = n !== R.page;
+  R.page = n;
+  $("pageInput").value = n;
+  $("prevBtn").disabled = n <= 1; $("nextBtn").disabled = n >= R.pdf.numPages;
+  await renderPage();
+  if (changed || opts.resume) $("viewer").scrollTop = 0;
+  if (opts.resume && n > 1) toast(`Welcome back: page ${n}`);
+  clearTimeout(R.saveTimer); $("saved").textContent = "";
+  R.saveTimer = setTimeout(persistPage, 400);
+  markTocCurrent(); renderNotes();
+}
+
+async function renderPage() {
+  const page = await R.pdf.getPage(R.page);
+  const base = page.getViewport({ scale: 1 });
+  const viewer = $("viewer");
+  const avail = Math.max(200, viewer.clientWidth - 32);
+  const scale = R.zoom === "fit" ? Math.min(avail / base.width, 3) : R.zoom;
+  const vp = page.getViewport({ scale });
+  // iPhone/iPad refuse canvases bigger than ~16 million pixels, so lower sharpness when zoomed far in.
+  const dpr = Math.min(window.devicePixelRatio || 1, Math.sqrt(14e6 / (vp.width * vp.height)));
+  const canvas = $("pageCanvas"), ctx = canvas.getContext("2d");
+  if (R.renderTask) { R.renderTask.cancel(); }
+  canvas.width = Math.floor(vp.width * dpr); canvas.height = Math.floor(vp.height * dpr);
+  canvas.style.width = Math.floor(vp.width) + "px"; canvas.style.height = Math.floor(vp.height) + "px";
+  const wrap = $("pageWrap"); wrap.style.width = Math.floor(vp.width) + "px"; wrap.style.height = Math.floor(vp.height) + "px";
+  R.renderTask = page.render({ canvasContext: ctx, viewport: vp, transform: dpr !== 1 ? [dpr, 0, 0, dpr, 0, 0] : null });
+  try { await R.renderTask.promise; } catch (e) { if (e && e.name === "RenderingCancelledException") return; throw e; }
+  $("loading").classList.add("hidden");
+  // text layer, so text can be selected and quoted into notes
+  const tl = $("textLayer"); tl.innerHTML = "";
+  tl.style.setProperty("--scale-factor", scale);
+  try {
+    const textContent = await page.getTextContent();
+    await pdfjsLib.renderTextLayer({ textContentSource: textContent, container: tl, viewport: vp, textDivs: [] }).promise;
+  } catch {}
+}
+
+function setZoom(z) {
+  if (z !== "fit") z = Math.max(0.4, Math.min(4, Math.round(z * 100) / 100));
+  R.zoom = z; renderPage(); persistPage();
+  toast(z === "fit" ? "Fit to width" : `Zoom ${Math.round(z * 100)}%`);
+}
+async function zoomStep(dir) {
+  const page = await R.pdf.getPage(R.page);
+  const base = page.getViewport({ scale: 1 });
+  const cur = parseFloat($("pageCanvas").style.width) / base.width;
+  setZoom(cur * (dir > 0 ? 1.15 : 1 / 1.15));
+}
+
+/* ----- Table of contents ----- */
+async function resolveDestPage(dest) {
+  try {
+    if (typeof dest === "string") dest = await R.pdf.getDestination(dest);
+    if (!Array.isArray(dest)) return null;
+    const ref = dest[0];
+    if (typeof ref === "number") return ref + 1;
+    return (await R.pdf.getPageIndex(ref)) + 1;
+  } catch { return null; }
+}
+async function buildOutline() {
+  const list = $("tocList"); list.innerHTML = ""; R.outlineFlat = [];
+  const outline = await R.pdf.getOutline();
+  if (!outline || !outline.length) { list.innerHTML = `<p class="muted" style="margin:0 8px">This PDF has no table of contents. Use the page box at the top, or your notes, to jump around.</p>`; return; }
+  async function build(items, parent) {
+    for (const it of items) {
+      const pg = it.dest ? await resolveDestPage(it.dest) : null;
+      const b = document.createElement("button");
+      b.className = "toc-item";
+      b.innerHTML = `${pg ? `<span class="pg">${pg}</span>` : ""}${esc(it.title || "Untitled")}`;
+      if (pg) { b.onclick = () => { goTo(pg); if (innerWidth < 900) $("toc").classList.add("hidden"); }; R.outlineFlat.push({ pg, el: b }); }
+      parent.appendChild(b);
+      if (it.items && it.items.length) { const k = document.createElement("div"); k.className = "toc-kids"; parent.appendChild(k); await build(it.items, k); }
+    }
+  }
+  await build(outline, list);
+}
+function markTocCurrent() {
+  let best = null;
+  for (const o of R.outlineFlat) { o.el.classList.remove("current"); if (o.pg <= R.page && (!best || o.pg >= best.pg)) best = o; }
+  if (best) best.el.classList.add("current");
+}
+
+/* ----- Notes ----- */
+function renderNotes() {
+  if (!R.book) return;
+  $("composerLabel").textContent = R.editing ? `Editing note on page ${R.editing.page}` : `New note on page ${R.page}`;
+  $("tabPage").classList.toggle("on", R.tab === "page"); $("tabAll").classList.toggle("on", R.tab === "all");
+  $("noteSearch").classList.toggle("hidden", R.tab !== "all");
+  const q = $("noteSearch").value.trim().toLowerCase();
+  let list = R.notes.slice().sort((a, b) => a.page - b.page || a.createdAt - b.createdAt);
+  if (R.tab === "page") list = list.filter((n) => n.page === R.page);
+  else if (q) list = list.filter((n) => n.text.toLowerCase().includes(q));
+  $("notesBtn").innerHTML = `✎<span class="lbl"> Notes</span> (${R.notes.length})`;
+  const el = $("noteList");
+  if (!list.length) {
+    el.innerHTML = `<p class="muted">${R.tab === "page" ? "No notes on this page yet." : q ? "No notes match your search." : "No notes in this book yet."}</p>`;
+    return;
+  }
+  el.innerHTML = "";
+  for (const n of list) {
+    const d = document.createElement("div"); d.className = "note";
+    d.innerHTML = `<div class="head"><button class="pgbtn" title="Go to page">p. ${n.page}</button><span class="date">${fmtDate(n.updatedAt || n.createdAt)}</span></div>
+      <div class="txt">${esc(n.text)}</div>
+      <div class="acts"><button class="ed">Edit</button><button class="rm">Delete</button></div>`;
+    d.querySelector(".pgbtn").onclick = () => goTo(n.page);
+    d.querySelector(".ed").onclick = () => { R.editing = n; $("noteText").value = n.text; $("cancelEditBtn").classList.remove("hidden"); $("saveNoteBtn").textContent = "Update note"; renderNotes(); $("noteText").focus(); };
+    d.querySelector(".rm").onclick = async () => {
+      if (!confirm("Delete this note?")) return;
+      await del("notes", n.id); R.notes = R.notes.filter((x) => x.id !== n.id); renderNotes();
+    };
+    el.appendChild(d);
+  }
+}
+function resetComposer() {
+  R.editing = null; $("noteText").value = ""; $("cancelEditBtn").classList.add("hidden"); $("saveNoteBtn").textContent = "Save note";
+  try { localStorage.removeItem("draft:" + R.book.id); } catch {}
+  renderNotes();
+}
+async function saveNote() {
+  const text = $("noteText").value.trim();
+  if (!text) { $("noteText").focus(); return; }
+  if (R.editing) {
+    R.editing.text = text; R.editing.updatedAt = Date.now(); await put("notes", R.editing);
+    toast("Note updated");
+  } else {
+    const n = { id: uid(), bookId: R.book.id, page: R.page, text, createdAt: Date.now() };
+    await put("notes", n); R.notes.push(n);
+    toast(`Note saved on page ${R.page}`);
+  }
+  resetComposer();
+}
+function quoteSelection() {
+  const s = window.getSelection().toString().replace(/\s+/g, " ").trim();
+  if (!s) { toast("First select some text on the page with your mouse"); return; }
+  const ta = $("noteText");
+  ta.value = (ta.value ? ta.value.trimEnd() + "\n" : "") + `“${s}”\n`;
+  ta.focus(); ta.selectionStart = ta.selectionEnd = ta.value.length;
+}
+function exportBookNotes() {
+  const list = R.notes.slice().sort((a, b) => a.page - b.page || a.createdAt - b.createdAt);
+  if (!list.length) { toast("No notes to export yet"); return; }
+  const lines = [`Notes: ${R.book.title}`, `Exported ${fmtDate(Date.now())}`, ""];
+  for (const n of list) lines.push(`--- Page ${n.page} (${fmtDate(n.createdAt)}) ---`, n.text, "");
+  download(`${R.book.title} - notes.txt`, lines.join("\r\n"));
+}
+
+/* ----- Backup / restore (notes + reading positions, not the PDFs) ----- */
+async function exportAll() {
+  const books = (await getAll("books")).map(({ id, title, fileName, size, pages, lastPage }) => ({ id, title, fileName, size, pages, lastPage }));
+  const notes = await getAll("notes");
+  download(`book-reader-backup-${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify({ version: 1, books, notes }, null, 2), "application/json");
+}
+async function importAll(file) {
+  let data;
+  try { data = JSON.parse(await file.text()); } catch { toast("That file is not a valid backup"); return; }
+  const mine = await getAll("books");
+  let added = 0;
+  for (const ob of data.books || []) {
+    const match = mine.find((b) => b.id === ob.id) || mine.find((b) => b.fileName === ob.fileName && b.size === ob.size);
+    if (!match) continue;
+    if ((ob.lastPage || 0) > (match.lastPage || 0)) { match.lastPage = ob.lastPage; await put("books", match); }
+    const existing = new Set((await notesFor(match.id)).map((n) => n.id));
+    for (const n of (data.notes || []).filter((n) => n.bookId === ob.id)) {
+      if (existing.has(n.id)) continue;
+      await put("notes", { ...n, bookId: match.id }); added++;
+    }
+  }
+  toast(`Restored ${added} note(s). Add the PDFs first if some books were missing.`);
+  renderLibrary();
+}
+
+/* ================= Wiring ================= */
+$("addBtn").onclick = () => $("fileInput").click();
+$("fileInput").onchange = (e) => { addFiles([...e.target.files]); e.target.value = ""; };
+$("exportAllBtn").onclick = exportAll;
+$("importBtn").onclick = () => $("importInput").click();
+$("importInput").onchange = (e) => { if (e.target.files[0]) importAll(e.target.files[0]); e.target.value = ""; };
+$("backBtn").onclick = closeBook;
+$("prevBtn").onclick = () => goTo(R.page - 1);
+$("nextBtn").onclick = () => goTo(R.page + 1);
+$("pageInput").onchange = (e) => goTo(+e.target.value);
+$("pageInput").onkeydown = (e) => { if (e.key === "Enter") { goTo(+e.target.value); $("viewer").focus(); } };
+$("zoomIn").onclick = () => zoomStep(1);
+$("zoomOut").onclick = () => zoomStep(-1);
+$("zoomFit").onclick = () => setZoom("fit");
+const toggleNight = () => setNight(!document.body.classList.contains("night"));
+$("nightBtn").onclick = toggleNight; $("nightBtnLib").onclick = toggleNight;
+$("tocBtn").onclick = () => $("toc").classList.toggle("hidden");
+$("notesBtn").onclick = () => {
+  const p = $("notesPanel"); p.classList.toggle("hidden");
+  try { localStorage.setItem("notesOpen", p.classList.contains("hidden") ? "0" : "1"); } catch {}
+  if (R.pdf && R.zoom === "fit") renderPage();
+  if (!p.classList.contains("hidden")) $("noteText").focus();
+};
+$("saveNoteBtn").onclick = saveNote;
+$("cancelEditBtn").onclick = resetComposer;
+$("quoteBtn").onmousedown = (e) => e.preventDefault(); // keep the text selection when clicking
+$("quoteBtn").onclick = quoteSelection;
+$("tabPage").onclick = () => { R.tab = "page"; renderNotes(); };
+$("tabAll").onclick = () => { R.tab = "all"; renderNotes(); };
+$("noteSearch").oninput = renderNotes;
+$("exportBookBtn").onclick = exportBookNotes;
+$("noteText").onkeydown = (e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); saveNote(); } };
+$("noteText").oninput = () => { try { if (!R.editing) localStorage.setItem("draft:" + R.book.id, $("noteText").value); } catch {} };
+
+document.addEventListener("keydown", (e) => {
+  if (!R.pdf) return;
+  const typing = /^(INPUT|TEXTAREA)$/.test(document.activeElement.tagName);
+  if (typing) { if (e.key === "Escape") document.activeElement.blur(); return; }
+  const v = $("viewer");
+  switch (e.key) {
+    case "ArrowRight": case "PageDown": goTo(R.page + 1); break;
+    case "ArrowLeft": case "PageUp": goTo(R.page - 1); break;
+    case " ": // space scrolls; at the bottom it turns the page
+      if (v.scrollTop + v.clientHeight >= v.scrollHeight - 4) { e.preventDefault(); goTo(R.page + 1); }
+      return;
+    case "Home": goTo(1); break;
+    case "End": goTo(R.pdf.numPages); break;
+    case "+": case "=": zoomStep(1); break;
+    case "-": zoomStep(-1); break;
+    case "0": setZoom("fit"); break;
+    case "n": case "N": $("notesBtn").click(); break;
+    case "c": case "C": $("tocBtn").click(); break;
+    case "d": case "D": toggleNight(); break;
+    case "g": case "G": $("pageInput").focus(); $("pageInput").select(); break;
+    case "Escape": closeBook(); break;
+    default: return;
+  }
+  e.preventDefault();
+});
+document.querySelectorAll(".closePanel").forEach((b) => b.onclick = () => {
+  $(b.dataset.close).classList.add("hidden");
+  if (b.dataset.close === "notesPanel") try { localStorage.setItem("notesOpen", "0"); } catch {}
+});
+
+// Swipe left/right on the page to turn pages (phone/tablet). Ignored while zoomed in sideways or selecting text.
+let sw = null;
+$("viewer").addEventListener("touchstart", (e) => {
+  sw = e.touches.length === 1 ? { x: e.touches[0].clientX, y: e.touches[0].clientY, t: Date.now() } : null;
+}, { passive: true });
+$("viewer").addEventListener("touchend", (e) => {
+  if (!sw || !R.pdf) return;
+  const t = e.changedTouches[0], dx = t.clientX - sw.x, dy = t.clientY - sw.y, v = $("viewer");
+  const canScrollX = v.scrollWidth > v.clientWidth + 2;
+  if (!canScrollX && Date.now() - sw.t < 600 && Math.abs(dx) > 60 && Math.abs(dx) > 2 * Math.abs(dy) && !window.getSelection().toString()) {
+    goTo(R.page + (dx < 0 ? 1 : -1));
+  }
+  sw = null;
+}, { passive: true });
+
+function setTopbarVar() { document.documentElement.style.setProperty("--tb", $("topbar").offsetHeight + "px"); }
+let resizeT; window.addEventListener("resize", () => { clearTimeout(resizeT); resizeT = setTimeout(() => { setTopbarVar(); if (R.pdf && R.zoom === "fit") renderPage(); }, 150); });
+window.addEventListener("beforeunload", () => { if (R.book) { R.book.lastPage = R.page; put("books", R.book); } });
+
+/* ================= Start ================= */
+(async () => {
+  try { if (localStorage.getItem("night") === "1") setNight(true); } catch {}
+  try { if (!window.indexedDB) throw 0; db = await openDB(); }
+  catch {
+    mem = {};
+    $("storageWarn").classList.remove("hidden");
+  }
+  if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+  try { await addBundledBooks(); } catch (e) { console.error(e); }
+  renderLibrary();
+})();
+</script>
+</body>
+</html>
